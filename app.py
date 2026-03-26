@@ -196,23 +196,22 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
 
     results = []
     for mode, base_cost in fares.items():
-        ttime           = mode_time(dist, mode, traffic)
-        warning         = ""
-        vehicles_needed = 1
-
+        ttime   = mode_time(dist, mode, traffic)
+        warning = ""
+        
+        # Apply passenger multiplier ONLY to the Bus
         if mode == "Bus":
             adjusted_cost = base_cost * persons
         else:
             adjusted_cost = base_cost
 
+        # Simple warnings without complex math
         if mode == "Bike" and persons > 1:
             warning = f"Not suitable for {persons} persons"
-        if mode == "Rickshaw" and persons > 3:
-            vehicles_needed = -(-persons // 3)
-            warning = f"~{vehicles_needed} rickshaws needed for {persons} persons"
+        elif mode == "Rickshaw" and persons > 3:
+            warning = f"Tight fit for {persons} persons"
 
-        adjusted_cost = base_cost * vehicles_needed
-        score         = compute_score(adjusted_cost, ttime, comfort_score[mode], pref)
+        score = compute_score(adjusted_cost, ttime, comfort_score[mode], pref)
 
         results.append({
             "Mode":       mode,
@@ -221,8 +220,8 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
             "Score":      score,
             "Display":    format_cost(adjusted_cost, mode),
             "Warning":    warning,
-            "Unsuitable": bool(warning),
-            "Vehicles":   vehicles_needed,
+            "Unsuitable": mode == "Bike" and persons > 1,
+            "Vehicles":   1,
         })
 
     suitable   = sorted([r for r in results if not r["Unsuitable"]], key=lambda x: x["Score"])
