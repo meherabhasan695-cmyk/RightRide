@@ -10,7 +10,7 @@ import os
 # =========================
 st.set_page_config(page_title="RightRide", layout="centered", page_icon="🚦")
 
-GOOGLE_API_KEY = "AIzaSyD9WIwKJ1CjKOg_l9py6oUufN1TOj_cPPc"
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 
 # =========================
 # LOGO + HEADER
@@ -198,6 +198,11 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
         ttime           = mode_time(dist, mode, traffic)
         warning         = ""
         vehicles_needed = 1
+
+        if mode == "Bus":
+            adjusted_cost = base_cost * persons
+        else:
+            adjusted_cost = base_cost
 
         if mode == "Bike" and persons > 1:
             warning = f"Not suitable for {persons} persons"
