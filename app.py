@@ -100,6 +100,7 @@ def get_distance_time(src, dst):
         }
         res     = requests.get(url, params=params, timeout=10).json()
         if res["status"] != "OK":
+            st.error(f"Google API Blocked It! Reason: {res.get('error_message', res['status'])}")
             return None, None, None
         element = res["rows"][0]["elements"][0]
         if element["status"] != "OK":
