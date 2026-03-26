@@ -1,5 +1,8 @@
 import requests
 import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import numpy as np
 
 # =========================
 # CONFIG
@@ -92,6 +95,109 @@ def format_cost(c, mode):
         return f"BDT {int(c*0.965)}–{int(c*1.035)}"
 
 comfort_score = {"Bus": 3, "CNG": 4, "Rickshaw": 2, "Bike": 2}
+
+# =========================
+# VISUALIZATION
+# =========================
+def plot_comparison(ranked, budget, source, destination):
+    """
+    Draws a side-by-side bar chart replicating the Visual Comparison layout:
+      Left  → Overall Score  (lower = better)
+      Right → Estimated Cost (BDT) with a budget reference line
+    """
+    modes  = [r["Mode"]  for r in ranked]
+    scores = [r["Score"] for r in ranked]
+    costs  = [r["Cost"]  for r in ranked]
+
+    x         = np.arange(len(modes))
+    bar_width = 0.5
+    bg_color  = "#f0f2f8"
+
+    # ── score bar colours: green=best, orange=2nd/3rd best tie, purple=rest ──
+    min_score   = min(scores)
+    score_colors = []
+    for s in scores:
+        if s == min_score:
+            score_colors.append("#2ec4a9")   # teal-green → best
+        elif s <= sorted(scores)[1] + 1:
+            score_colors.append("#e07b39")   # orange → near-best
+        else:
+            score_colors.append("#7b6fd4")   # purple → rest
+
+    # ── cost bar colours: green=within budget, red=over budget ──
+    cost_colors = ["#2ec4a9" if c <= budget else "#e05c5c" for c in costs]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5.5))
+    fig.patch.set_facecolor(bg_color)
+
+    # ── LEFT: Overall Score ──────────────────────────────────────────────────
+    ax1.set_facecolor(bg_color)
+    bars1 = ax1.bar(x, scores, width=bar_width, color=score_colors,
+                    zorder=2, linewidth=0)
+
+    for bar, val in zip(bars1, scores):
+        ax1.text(bar.get_x() + bar.get_width() / 2,
+                 bar.get_height() + max(scores) * 0.018,
+                 f"{val}",
+                 ha="center", va="bottom",
+                 fontsize=11, fontweight="bold", color="#222222")
+
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(modes, fontsize=11)
+    ax1.set_ylabel("Score", fontsize=11, color="#555555")
+    ax1.set_title("Overall Score (lower = better)",
+                  fontsize=13, fontweight="bold", pad=14)
+    ax1.set_ylim(0, max(scores) * 1.25)
+    ax1.spines[["top", "right", "left"]].set_visible(False)
+    ax1.tick_params(left=False, colors="#444444")
+    ax1.yaxis.grid(True, color="white", linewidth=1.4, zorder=0)
+    ax1.set_axisbelow(True)
+
+    # ── RIGHT: Estimated Cost ─────────────────────────────────────────────────
+    ax2.set_facecolor(bg_color)
+    bars2 = ax2.bar(x, costs, width=bar_width, color=cost_colors,
+                    zorder=2, linewidth=0)
+
+    for bar, val in zip(bars2, costs):
+        ax2.text(bar.get_x() + bar.get_width() / 2,
+                 bar.get_height() + max(costs) * 0.018,
+                 f"{int(val)} BDT",
+                 ha="center", va="bottom",
+                 fontsize=11, fontweight="bold", color="#222222")
+
+    # budget reference line
+    ax2.axhline(y=budget, color="#e8a020", linewidth=2,
+                linestyle="--", zorder=3)
+    ax2.text(len(modes) - 0.28, budget + max(costs) * 0.02,
+             f"Budget: {int(budget)} BDT",
+             ha="right", va="bottom",
+             fontsize=10, color="#e8a020", fontstyle="italic")
+
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(modes, fontsize=11)
+    ax2.set_ylabel("BDT", fontsize=11, color="#555555")
+    ax2.set_title("Estimated Cost (BDT)",
+                  fontsize=13, fontweight="bold", pad=14)
+    ax2.set_ylim(0, max(max(costs), budget) * 1.28)
+    ax2.spines[["top", "right", "left"]].set_visible(False)
+    ax2.tick_params(left=False, colors="#444444")
+    ax2.yaxis.grid(True, color="white", linewidth=1.4, zorder=0)
+    ax2.set_axisbelow(True)
+
+    # ── Title & layout ────────────────────────────────────────────────────────
+    fig.suptitle("Visual Comparison",
+                 fontsize=17, fontweight="bold",
+                 x=0.02, ha="left", y=1.03)
+    fig.text(0.02, 0.98,
+             f"{source}  →  {destination}",
+             fontsize=10, color="#666666", ha="left", va="top")
+
+    plt.tight_layout()
+    plt.savefig("rightride_comparison.png",
+                dpi=150, bbox_inches="tight",
+                facecolor=fig.get_facecolor())
+    print("\n  Chart saved → rightride_comparison.png")
+    plt.show()
 
 # =========================
 # GET USER INPUT
@@ -187,7 +293,7 @@ def main():
     for mode, base_cost in fares.items():
         ttime   = mode_time(dist, mode, traffic)
         warning = ""
-        
+
         # Apply passenger multiplier ONLY to the Bus
         if mode == "Bus":
             adjusted_cost = base_cost * persons
@@ -305,6 +411,12 @@ def main():
         print(f"  - {fb}")
 
     print("\n" + "=" * 55)
+
+    # =========================
+    # VISUALISATION
+    # =========================
+    plot_comparison(ranked, budget, source, destination)
+
 
 if __name__ == "__main__":
     main()
