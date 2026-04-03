@@ -18,7 +18,7 @@ GOOGLE_API_KEY = "AIzaSyD9WIwKJ1CjKOg_l9py6oUufN1TOj_cPPc"
 col1, col2 = st.columns([1, 5])
 with col1:
     if os.path.exists("logo.png"):
-        st.image("logo.png", width=140)
+        st.image("logo.png", width=80)
     else:
         st.write("🚦")
 with col2:
@@ -124,15 +124,19 @@ def mode_time(dist_km, mode, traffic):
     multiplier = {"low": 1.0, "medium": 1.3, "high": 1.7}[traffic]
     return round((dist_km / speeds[mode]) * 60 * multiplier, 1)
 
-def compute_score(cost, time, comfort, pref):
+comfort_score = {"Bus": 2, "CNG": 5, "Auto Rickshaw": 4, "Rickshaw": 3, "Bike": 3}
+rank_labels   = ["1st", "2nd", "3rd", "4th", "5th"]
+
+def compute_score(nc, nt, ncom, pref):
+    """All inputs are normalized 0-1. Lower score = better."""
     weights = {
-        "Cheap":        (0.6, 0.9, 0.1),
-        "Fast":         (0.3, 1.2, 0.1),
-        "Comfort":      (0.3, 0.9, 0.5),
-        "No Preference":(0.3, 1, 0.2),  # time has most weightage by default
+        "No Preference": (0.3, 0.5, 0.2),
+        "Cheap":         (0.6, 0.3, 0.1),
+        "Fast":          (0.2, 0.7, 0.1),
+        "Comfort":       (0.2, 0.2, 0.6),
     }
     w1, w2, w3 = weights[pref]
-    return round(w1*cost + w2*time - w3*comfort, 2)
+    return round(w1*nc + w2*nt - w3*ncom, 4)
 
 def format_cost(c, mode):
     if mode in ("CNG", "Bike"):
@@ -141,9 +145,6 @@ def format_cost(c, mode):
         return f"BDT {int(c*0.95)}–{int(c*1.05)}"
     else:
         return f"BDT {int(c*0.965)}–{int(c*1.035)}"
-
-comfort_score = {"Bus": 3, "CNG": 4, "Auto Rickshaw": 3, "Rickshaw": 2, "Bike": 2}
-rank_labels   = ["1st", "2nd", "3rd", "4th", "5th"]
 
 # =========================
 # MAIN BUTTON
@@ -180,17 +181,23 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
     cng_t      = mode_time(dist, "CNG", traffic)
     auto_t     = mode_time(dist, "Auto Rickshaw", traffic)
 
-    fares = {
-        "CNG":          45 + 12*dist + 2*cng_t,
-        "Auto Rickshaw":30 + 11*dist + 1.2*auto_t,
-        "Rickshaw":     35 + 10*dist,
-        "Bike":         40 + 12*dist,
+    # Pre-compute
+    raw_costs = {
+        "CNG":          50 + 14.2*dist + 2*cng_t,
+        "Auto Rickshaw":40 + 11*dist + 1.2*auto_t,
+        "Rickshaw":     45 + 11.7*dist,
+        "Bike":         45 + 13*dist,
         "Bus":          (bus_fare if bus_fare else max(10, dist*2.5)) * persons,
     }
+    raw_times   = {m: mode_time(dist, m, traffic) for m in raw_costs}
+    min_c, max_c = min(raw_costs.values()), max(raw_costs.values())
+    min_t, max_t = min(raw_times.values()), max(raw_times.values())
+    min_com      = min(comfort_score.values())
+    max_com      = max(comfort_score.values())
 
     results = []
-    for mode, base_cost in fares.items():
-        ttime           = mode_time(dist, mode, traffic)
+    for mode, base_cost in raw_costs.items():
+        ttime           = raw_times[mode]
         warning         = ""
         vehicles_needed = 1
 
@@ -201,7 +208,12 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
             warning = f"~{vehicles_needed} {mode}s needed for {persons} persons"
 
         adjusted_cost = base_cost * vehicles_needed
-        score         = compute_score(adjusted_cost, ttime, comfort_score[mode], pref)
+
+        # Normalize all three dimensions 0-1
+        nc   = (adjusted_cost - min_c) / (max_c - min_c) if max_c != min_c else 0
+        nt   = (ttime - min_t) / (max_t - min_t) if max_t != min_t else 0
+        ncom = (comfort_score[mode] - min_com) / (max_com - min_com) if max_com != min_com else 0
+        score = compute_score(nc, nt, ncom, pref)
 
         results.append({
             "Mode":       mode,
@@ -266,18 +278,30 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
     sns.barplot(data=df_chart, x="Mode", y="Score", palette=colors_score, ax=axes[0], width=0.55)
     axes[0].set_title("Overall Score (lower = better)", fontweight="bold", color="#1e293b")
     axes[0].set_xlabel(""); axes[0].set_ylabel("Score", color="#64748b")
+    sns.barplot(data=df_chart, x="Mode", y="Score", palette=colors_score, ax=axes[0], width=0.55)
+
+    max_score = df_chart["Score"].max()
+    axes[0].set_ylim(0, max_score + 0.1)
+
     for bar, r in zip(axes[0].patches, ranked):
-        axes[0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
-                     str(r["Score"]), ha="center", fontsize=9, fontweight="bold")
+        axes[0].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
+                 str(r["Score"]), ha="center", fontsize=9, fontweight="bold")
 
     sns.barplot(data=df_chart, x="Mode", y="Cost", palette=colors_cost, ax=axes[1], width=0.55)
+
+    max_cost = df_chart["Cost"].max()
+    axes[1].set_ylim(0, max_cost + 20)
+
     axes[1].set_title("Estimated Cost (BDT)", fontweight="bold", color="#1e293b")
     axes[1].set_xlabel(""); axes[1].set_ylabel("BDT", color="#64748b")
-    axes[1].axhline(y=budget, color="#f59e0b", linestyle="--", linewidth=1.8, label=f"Budget: {budget:.0f} BDT")
+
+    axes[1].axhline(y=budget, color="#f59e0b", linestyle="--", linewidth=1.8,
+                    label=f"Budget: {budget:.0f} BDT")
     axes[1].legend(fontsize=9)
+
     for bar, r in zip(axes[1].patches, ranked):
-        axes[1].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
-                     f"{int(r['Cost'])} BDT", ha="center", fontsize=9, fontweight="bold")
+        axes[1].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 5,
+                 f"{int(r['Cost'])} BDT", ha="center", fontsize=9, fontweight="bold")
 
     plt.tight_layout(pad=2)
     st.pyplot(fig)
