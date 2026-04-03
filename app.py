@@ -10,7 +10,7 @@ import os
 # =========================
 st.set_page_config(page_title="RightRide", layout="centered", page_icon="🚦")
 
-GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+GOOGLE_API_KEY = "AIzaSyD9WIwKJ1CjKOg_l9py6oUufN1TOj_cPPc"
 
 # =========================
 # LOGO + HEADER
@@ -18,7 +18,7 @@ GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 col1, col2 = st.columns([1, 5])
 with col1:
     if os.path.exists("logo.png"):
-        st.image("logo.png", width=80)
+        st.image("logo.png", width=140)
     else:
         st.write("🚦")
 with col2:
@@ -73,12 +73,7 @@ with col_b:
 
 max_time = st.number_input(tr("Max Time (minutes)", "সর্বোচ্চ সময় (মিনিট)"),
                            min_value=5, max_value=300, value=60, step=5)
-
-# Preference — No Preference is default first option
-pref = st.selectbox(
-    tr("Preference (optional)", "পছন্দ (ঐচ্ছিক)"),
-    [tr("No Preference", "কোনো পছন্দ নেই"), "Cheap", "Fast", "Comfort"]
-)
+pref     = st.selectbox(tr("Preference", "পছন্দ"), ["No Preference", "Cheap", "Fast", "Comfort"])
 
 # =========================
 # HELPER FUNCTIONS
@@ -100,7 +95,6 @@ def get_distance_time(src, dst):
         }
         res     = requests.get(url, params=params, timeout=10).json()
         if res["status"] != "OK":
-            st.error(f"Google API Blocked It! Reason: {res.get('error_message', res['status'])}")
             return None, None, None
         element = res["rows"][0]["elements"][0]
         if element["status"] != "OK":
@@ -126,32 +120,30 @@ def get_bus_fare(src, dst):
     return float(match.iloc[0]["Fare"]) if not match.empty else None
 
 def mode_time(dist_km, mode, traffic):
-    speeds     = {"Bus": 18, "CNG": 25, "Rickshaw": 10, "Bike": 22}
+    speeds     = {"Bus": 18, "CNG": 25, "Auto Rickshaw": 18, "Rickshaw": 10, "Bike": 22}
     multiplier = {"low": 1.0, "medium": 1.3, "high": 1.7}[traffic]
     return round((dist_km / speeds[mode]) * 60 * multiplier, 1)
 
-def compute_score(cost, time, comfort, preference):
-    no_pref = tr("No Preference", "কোনো পছন্দ নেই")
-    if preference == no_pref:
-        w1, w2, w3 = 0.33, 0.33, 0.33
-    elif preference == "Cheap":
-        w1, w2, w3 = 0.6, 0.3, 0.1
-    elif preference == "Fast":
-        w1, w2, w3 = 0.3, 0.6, 0.1
-    else:
-        w1, w2, w3 = 0.3, 0.2, 0.5
+def compute_score(cost, time, comfort, pref):
+    weights = {
+        "Cheap":        (0.6, 0.9, 0.1),
+        "Fast":         (0.3, 1.2, 0.1),
+        "Comfort":      (0.3, 0.9, 0.5),
+        "No Preference":(0.3, 1, 0.2),  # time has most weightage by default
+    }
+    w1, w2, w3 = weights[pref]
     return round(w1*cost + w2*time - w3*comfort, 2)
 
 def format_cost(c, mode):
     if mode in ("CNG", "Bike"):
         return f"BDT {int(c*0.94)}–{int(c*1.06)}"
-    elif mode == "Rickshaw":
+    elif mode in ("Rickshaw", "Auto Rickshaw"):
         return f"BDT {int(c*0.95)}–{int(c*1.05)}"
     else:
         return f"BDT {int(c*0.965)}–{int(c*1.035)}"
 
-comfort_score = {"Bus": 3, "CNG": 4, "Rickshaw": 2, "Bike": 2}
-rank_labels   = ["1st", "2nd", "3rd", "4th"]
+comfort_score = {"Bus": 3, "CNG": 4, "Auto Rickshaw": 3, "Rickshaw": 2, "Bike": 2}
+rank_labels   = ["1st", "2nd", "3rd", "4th", "5th"]
 
 # =========================
 # MAIN BUTTON
@@ -184,34 +176,32 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
         dist, time_mins, traffic = 8.0, 25.0, "medium"
 
     # Fares & Results
-    bus_fare = get_bus_fare(source, destination)
-    cng_t    = mode_time(dist, "CNG", traffic)
+    bus_fare   = get_bus_fare(source, destination)
+    cng_t      = mode_time(dist, "CNG", traffic)
+    auto_t     = mode_time(dist, "Auto Rickshaw", traffic)
 
     fares = {
-        "CNG":      40 + 12 * dist + 2 * cng_t,
-        "Rickshaw": 20 + 10 * dist,
-        "Bike":     30 + 12 * dist,
-        "Bus":      bus_fare if bus_fare else max(10, dist * 2.5),
+        "CNG":          45 + 12*dist + 2*cng_t,
+        "Auto Rickshaw":30 + 11*dist + 1.2*auto_t,
+        "Rickshaw":     35 + 10*dist,
+        "Bike":         40 + 12*dist,
+        "Bus":          (bus_fare if bus_fare else max(10, dist*2.5)) * persons,
     }
 
     results = []
     for mode, base_cost in fares.items():
-        ttime   = mode_time(dist, mode, traffic)
-        warning = ""
-        
-        # Apply passenger multiplier ONLY to the Bus
-        if mode == "Bus":
-            adjusted_cost = base_cost * persons
-        else:
-            adjusted_cost = base_cost
+        ttime           = mode_time(dist, mode, traffic)
+        warning         = ""
+        vehicles_needed = 1
 
-        # Simple warnings without complex math
         if mode == "Bike" and persons > 1:
             warning = f"Not suitable for {persons} persons"
-        elif mode == "Rickshaw" and persons > 3:
-            warning = f"Tight fit for {persons} persons"
+        if mode in ("Rickshaw", "Auto Rickshaw") and persons > 3:
+            vehicles_needed = -(-persons // 3)
+            warning = f"~{vehicles_needed} {mode}s needed for {persons} persons"
 
-        score = compute_score(adjusted_cost, ttime, comfort_score[mode], pref)
+        adjusted_cost = base_cost * vehicles_needed
+        score         = compute_score(adjusted_cost, ttime, comfort_score[mode], pref)
 
         results.append({
             "Mode":       mode,
@@ -220,8 +210,8 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
             "Score":      score,
             "Display":    format_cost(adjusted_cost, mode),
             "Warning":    warning,
-            "Unsuitable": mode == "Bike" and persons > 1,
-            "Vehicles":   1,
+            "Unsuitable": bool(warning),
+            "Vehicles":   vehicles_needed,
         })
 
     suitable   = sorted([r for r in results if not r["Unsuitable"]], key=lambda x: x["Score"])
@@ -233,7 +223,7 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
     st.markdown("---")
     st.subheader(tr("Recommendation", "সুপারিশ"))
     budget_tag = "Within budget" if best["Cost"] <= budget else "Over budget"
-    st.success(f"🏆{best['Mode']} | {best['Display']} | {best['Time']} min | {budget_tag}")
+    st.success(f"{best['Mode']} | {best['Display']} | {best['Time']} min | {budget_tag}")
 
     if bus_fare is None:
         st.warning("No direct bus route found in database — bus fare is estimated.")
@@ -246,7 +236,7 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
     # Rankings
     st.subheader(tr("All Rankings", "সব র‍্যাংকিং"))
     for i, r in enumerate(ranked):
-        rank  = rank_labels[i] if i < 4 else "-"
+        rank  = rank_labels[i] if i < 5 else "-"
         note  = f" | {r['Warning']}" if r["Warning"] else ""
         over  = " | Over budget" if r["Cost"] > budget else " | Within budget"
         if r["Time"] <= max_time:
@@ -298,9 +288,9 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
     fastest  = min(results, key=lambda x: x["Time"])
     scores   = [r["Score"] for r in suitable] if suitable else [r["Score"] for r in results]
 
-    pref_display = "Balanced" if pref == tr("No Preference", "কোনো পছন্দ নেই") else pref
+    pref_label = pref if pref != "No Preference" else "Balanced (No Preference)"
     feedbacks = [
-        f"**{best['Mode']}** has the best score ({best['Score']}) based on your **{pref_display}** preference.",
+        f"**{best['Mode']}** has the best score ({best['Score']}) based on your **{pref_label}** preference.",
         f"Cheapest option: **{cheapest['Mode']}** at {cheapest['Display']}",
         f"Fastest option: **{fastest['Mode']}** at approximately {fastest['Time']} min",
     ]
@@ -324,7 +314,7 @@ if st.button(tr("Find Best Transport", "সেরা পরিবহন খু�
     if persons > 1:
         msg = f"For {persons} persons: Bike is not recommended."
         if persons > 3:
-            msg += f" Approximately {-(-persons//3)} rickshaws may be needed — cost adjusted accordingly."
+            msg += f" Approximately {-(-persons//3)} Rickshaws or Auto Rickshaws may be needed — cost adjusted accordingly."
         feedbacks.append(msg)
 
     over_time = [r for r in ranked if r["Time"] > max_time]
