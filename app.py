@@ -5,20 +5,18 @@ import matplotlib.pyplot as plt
 import folium
 import os
 from datetime import datetime
-from streamlit_js_eval import get_geolocation
+from streamlit_js_eval import get_geolocation   #streamlite is getting json data from ORS and showing it in a python web
 import streamlit.components.v1 as components
 
-# =========================
-# CONFIG
-# =========================
+
 st.set_page_config(page_title="RightRide", layout="centered", page_icon="🚦")
 
 GOOGLE_API_KEY = "AIzaSyD9WIwKJ1CjKOg_l9py6oUufN1TOj_cPPc"
 ORS_API_KEY    = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImMzYjliYzczOWE4MjQ3NDE4NjRlOTM2ODliZWUxNWE2IiwiaCI6Im11cm11cjY0In0="
 
-# =========================
+
 # SESSION STATE
-# =========================
+
 for key, default in [
     ("src_override", ""),
     ("dst_override", ""),
@@ -65,7 +63,7 @@ def get_traffic_note():
                if hour < 12 else
                "This is a rush hour in Dhaka city (4:00–8:00 PM). There is a possibility of high traffic.")
         return "warning", msg
-    elif 10 <= hour < 16:
+    elif 11 <= hour < 16:
         return "info", "Traffic is generally moderate at this time of day."
     else:
         return "info", "Traffic is generally low at this time of day."
