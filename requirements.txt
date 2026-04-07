@@ -3,3 +3,5 @@ requests
 pandas
 seaborn
 matplotlib
+folium
+streamlit-js-eval
