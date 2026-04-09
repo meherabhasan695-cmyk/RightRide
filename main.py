@@ -12,7 +12,7 @@ GOOGLE_API_KEY = "AIzaSyD9WIwKJ1CjKOg_l9py6oUufN1TOj_cPPc"
 ORS_API_KEY    = "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImMzYjliYzczOWE4MjQ3NDE4NjRlOTM2ODliZWUxNWE2IiwiaCI6Im11cm11cjY0In0="
 
 
-#BUS DATA FROM CSV
+#BUS Fare DATA FROM CSV
 def load_bus_data():
     try:
         df = pd.read_csv("Final_Cleaned_Bus_Routes.csv")
@@ -70,7 +70,7 @@ def ask(prompt, kind=str, valid=None, min_val=None, max_val=None, allow_empty=Fa
 
 
 
-# Helper
+# Api for dis , time and map
 def format_place(name):
     return f"{name}, Dhaka, Bangladesh"
 
@@ -204,8 +204,6 @@ def print_table(ranked, budget, max_time):
     headers = ["Rank", "Mode", "Fare Range", "Cost/Pax", "Time", "Score", "Budget", "Note"]
 
     sep   = "+" + "+".join("-" * w for w in col_w) + "+"
-
-
     row_f = "|" + "|".join(f"{{:<{w}}}" for w in col_w) + "|"
 
     print("\n" + sep)
